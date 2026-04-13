@@ -112,7 +112,13 @@ fn inhibit_sleep() -> Option<Child> {
     #[cfg(target_os = "linux")]
     {
         ProcessCommand::new("systemd-inhibit")
-            .args(["--what=idle", "--who=pomodoro-cli", "--why=Timer running", "sleep", "infinity"])
+            .args([
+                "--what=idle",
+                "--who=pomodoro-cli",
+                "--why=Timer running",
+                "sleep",
+                "infinity",
+            ])
             .spawn()
             .ok()
     }
@@ -130,11 +136,7 @@ fn run_pomodoro(cfg: &Config, keep_awake: bool) {
     }
 
     // Optionally prevent display sleep
-    let mut sleep_guard = if keep_awake {
-        inhibit_sleep()
-    } else {
-        None
-    };
+    let mut sleep_guard = if keep_awake { inhibit_sleep() } else { None };
 
     // Enable raw mode for keyboard input
     if let Err(e) = terminal::enable_raw_mode() {

@@ -11,8 +11,7 @@ pub fn show_stats() {
     }
 
     let today = Local::now().date_naive();
-    let week_start = today
-        - chrono::Duration::days(today.weekday().num_days_from_monday() as i64);
+    let week_start = today - chrono::Duration::days(today.weekday().num_days_from_monday() as i64);
 
     let mut today_work = 0u64;
     let mut today_count = 0u32;
