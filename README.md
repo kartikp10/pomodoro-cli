@@ -6,8 +6,31 @@ Runs entirely in your terminal with a live countdown, progress bar, desktop noti
 
 ## Install
 
+### Prebuilt binaries
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/youruser/pomodoro-cli/releases):
+
 ```bash
-# Build from source
+# macOS (Apple Silicon)
+curl -L https://github.com/youruser/pomodoro-cli/releases/latest/download/pomodoro-aarch64-apple-darwin.tar.gz | tar xz
+sudo mv pomodoro /usr/local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/youruser/pomodoro-cli/releases/latest/download/pomodoro-x86_64-apple-darwin.tar.gz | tar xz
+sudo mv pomodoro /usr/local/bin/
+
+# Linux (x86_64)
+curl -L https://github.com/youruser/pomodoro-cli/releases/latest/download/pomodoro-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv pomodoro /usr/local/bin/
+
+# Linux (aarch64)
+curl -L https://github.com/youruser/pomodoro-cli/releases/latest/download/pomodoro-aarch64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv pomodoro /usr/local/bin/
+```
+
+### From source
+
+```bash
 git clone https://github.com/youruser/pomodoro-cli.git
 cd pomodoro-cli
 cargo install --path .
@@ -99,6 +122,25 @@ notify = true
 | `--no-notify`     | Disable desktop notifications        | false   |
 | `--keep-awake`    | Prevent display sleep while running   | false   |
 
+## Releasing
+
+Versions follow [Semantic Versioning](https://semver.org/). To cut a new release:
+
+```bash
+# Bump version in Cargo.toml, commit, and tag
+./scripts/release.sh 0.2.0
+git add Cargo.toml Cargo.lock
+git commit -m "release: v0.2.0"
+git tag v0.2.0
+git push origin main --tags
+```
+
+Pushing a `v*.*.*` tag triggers the [release workflow](.github/workflows/release.yml) which:
+1. Runs tests
+2. Verifies the tag matches `Cargo.toml` version
+3. Builds binaries for Linux (x86_64, aarch64), macOS (x86_64, aarch64), and Windows (x86_64)
+4. Creates a GitHub Release with all artifacts and SHA-256 checksums
+
 ## License
 
-MIT
+[MIT](LICENSE.md)
