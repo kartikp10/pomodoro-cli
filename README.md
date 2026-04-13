@@ -33,6 +33,9 @@ pomodoro --rounds 3
 # Disable desktop notifications
 pomodoro --no-notify
 
+# Keep the screen awake while the timer runs
+pomodoro --keep-awake
+
 # View session stats
 pomodoro stats
 
@@ -94,6 +97,7 @@ notify = true
 | `--long-break <min>`  | Long break duration in minutes  | 15      |
 | `--rounds <n>`    | Work rounds before a long break      | 4       |
 | `--no-notify`     | Disable desktop notifications        | false   |
+| `--keep-awake`    | Prevent display sleep while running   | false   |
 
 ## License
 

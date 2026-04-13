@@ -16,6 +16,7 @@ use chrono::Local;
 use clap::{Parser, Subcommand};
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use crossterm::terminal;
+use std::process::{Child, Command as ProcessCommand};
 use std::time::Duration;
 
 #[derive(Parser)]
@@ -43,6 +44,10 @@ struct Cli {
     /// Disable desktop notifications
     #[arg(long, global = true, default_value_t = false)]
     no_notify: bool,
+
+    /// Keep the screen awake while the timer is running
+    #[arg(long, global = true, default_value_t = false)]
+    keep_awake: bool,
 }
 
 #[derive(Subcommand)]
@@ -69,7 +74,7 @@ fn main() {
     );
 
     match cli.command {
-        None | Some(Command::Start) => run_pomodoro(&cfg),
+        None | Some(Command::Start) => run_pomodoro(&cfg, cli.keep_awake),
         Some(Command::Stats) => stats::show_stats(),
         Some(Command::Config) => print_config(&cfg),
         Some(Command::Reset) => {
@@ -91,12 +96,45 @@ fn print_config(cfg: &Config) {
     println!();
 }
 
-fn run_pomodoro(cfg: &Config) {
+/// Prevent the display from sleeping. Returns a guard process to kill on exit.
+/// - macOS: `caffeinate -d` (prevent display sleep)
+/// - Linux: `systemd-inhibit` or `xdg-screensaver`
+fn inhibit_sleep() -> Option<Child> {
+    #[cfg(target_os = "macos")]
+    {
+        ProcessCommand::new("caffeinate")
+            .arg("-d") // prevent display sleep
+            .arg("-w")
+            .arg(std::process::id().to_string()) // tie to our PID
+            .spawn()
+            .ok()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        ProcessCommand::new("systemd-inhibit")
+            .args(["--what=idle", "--who=pomodoro-cli", "--why=Timer running", "sleep", "infinity"])
+            .spawn()
+            .ok()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        None
+    }
+}
+
+fn run_pomodoro(cfg: &Config, keep_awake: bool) {
     // Check if we have a real terminal
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         eprintln!("Error: pomodoro requires an interactive terminal.");
         std::process::exit(1);
     }
+
+    // Optionally prevent display sleep
+    let mut sleep_guard = if keep_awake {
+        inhibit_sleep()
+    } else {
+        None
+    };
 
     // Enable raw mode for keyboard input
     if let Err(e) = terminal::enable_raw_mode() {
@@ -106,6 +144,11 @@ fn run_pomodoro(cfg: &Config) {
     }
     let result = run_pomodoro_loop(cfg);
     let _ = terminal::disable_raw_mode();
+
+    // Kill the sleep inhibitor
+    if let Some(ref mut child) = sleep_guard {
+        let _ = child.kill();
+    }
 
     // Clear screen and show cursor on exit
     let _ = crossterm::execute!(
