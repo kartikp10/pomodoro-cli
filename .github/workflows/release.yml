@@ -114,12 +114,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Generate checksums
         run: |
           cd artifacts
-          find . -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec mv {} . \;
-          sha256sum pomodoro-* > checksums-sha256.txt
+          sha256sum -- *.tar.gz *.zip > checksums-sha256.txt
           cat checksums-sha256.txt
 
       - name: Create GitHub Release
