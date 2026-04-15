@@ -26,9 +26,61 @@ fn accent(session_type: SessionType) -> &'static str {
     }
 }
 
-/// Render a single frame of the timer display.
+/// Visible length of a string, ignoring ANSI escape sequences.
+fn visible_len(s: &str) -> usize {
+    let mut len = 0;
+    let mut in_escape = false;
+    for c in s.chars() {
+        if in_escape {
+            if c.is_ascii_alphabetic() {
+                in_escape = false;
+            }
+        } else if c == '\x1b' {
+            in_escape = true;
+        } else {
+            // Some emoji/symbols are double-width
+            len += unicode_width(c);
+        }
+    }
+    len
+}
+
+/// Approximate character display width (ASCII = 1, most emoji/CJK = 2).
+fn unicode_width(c: char) -> usize {
+    // Common emoji and symbols used in our UI
+    if matches!(c, '🍅' | '☕' | '🌴' | '⏸') {
+        2
+    } else if c.is_ascii() {
+        1
+    } else if ('\u{1100}'..='\u{115F}').contains(&c)
+        || ('\u{2E80}'..='\u{9FFF}').contains(&c)
+        || ('\u{F900}'..='\u{FAFF}').contains(&c)
+        || ('\u{FE10}'..='\u{FE6F}').contains(&c)
+        || ('\u{FF00}'..='\u{FF60}').contains(&c)
+        || ('\u{1F300}'..='\u{1F9FF}').contains(&c)
+    {
+        2
+    } else {
+        1
+    }
+}
+
+/// Center-pad a line to fit the terminal width.
+fn center(line: &str, term_width: usize) -> String {
+    let vis = visible_len(line);
+    if vis >= term_width {
+        return line.to_string();
+    }
+    let pad = (term_width - vis) / 2;
+    format!("{}{}", " ".repeat(pad), line)
+}
+
+/// Render a single frame of the timer display, centered in the terminal.
 pub fn render(timer: &Timer, round: u32, total_rounds: u32) -> io::Result<()> {
     let mut stdout = io::stdout();
+    let (term_w, term_h) = terminal::size().unwrap_or((80, 24));
+    let term_width = term_w as usize;
+    let term_height = term_h as usize;
 
     execute!(
         stdout,
@@ -71,31 +123,55 @@ pub fn render(timer: &Timer, round: u32, total_rounds: u32) -> io::Result<()> {
         .collect::<Vec<_>>()
         .join(" ");
 
-    let display = format!(
-        "\r\n\
-         \r\n\
-         {BOLD}{color}   {}{RESET}\r\n\
-         \r\n\
-         {GRAY}   round {WHITE}{}{GRAY}/{}{RESET}   {}\r\n\
-         \r\n\
-         \r\n\
-         {BOLD}{WHITE}   {:02}:{:02}{RESET}{}\r\n\
-         \r\n\
-         {DIM}   {bar}{RESET}  {GRAY}{:.0}%{RESET}\r\n\
-         \r\n\
-         \r\n\
-         {DIM}{GRAY}   p {WHITE}pause{GRAY}  ·  s {WHITE}skip{GRAY}  ·  q {WHITE}quit{RESET}\r\n",
-        timer.session_type,
-        round,
-        total_rounds,
-        dots,
-        mins,
-        secs,
-        state_badge,
-        progress * 100.0,
+    // Percentage label with balanced padding so the bar stays centered
+    let pct_label = format!("{:.0}%", progress * 100.0);
+    let label_max_width = 4; // "100%"
+    let label_pad = label_max_width - pct_label.len();
+    let bar_line = format!(
+        "{}{DIM}{bar}{RESET}  {GRAY}{}{}{RESET}",
+        " ".repeat(label_max_width + 2),
+        pct_label,
+        " ".repeat(label_pad),
     );
 
-    execute!(stdout, Print(display))?;
+    // Build content lines
+    let lines: Vec<String> = vec![
+        String::new(),
+        format!("{BOLD}{color}{}{RESET}", timer.session_type),
+        String::new(),
+        format!(
+            "{GRAY}round {WHITE}{}{GRAY}/{}{RESET}   {}",
+            round, total_rounds, dots
+        ),
+        String::new(),
+        String::new(),
+        format!("{BOLD}{WHITE}{:02}:{:02}{RESET}{}", mins, secs, state_badge),
+        String::new(),
+        bar_line,
+        String::new(),
+        String::new(),
+        format!("{DIM}{GRAY}p {WHITE}pause{GRAY}  ·  s {WHITE}skip{GRAY}  ·  q {WHITE}quit{RESET}"),
+    ];
+
+    // Vertical centering: pad top so content block is in the middle
+    let content_height = lines.len();
+    let top_pad = if term_height > content_height {
+        (term_height - content_height) / 2
+    } else {
+        0
+    };
+
+    // Build the full frame
+    let mut frame = String::new();
+    for _ in 0..top_pad {
+        frame.push_str("\r\n");
+    }
+    for line in &lines {
+        frame.push_str(&center(line, term_width));
+        frame.push_str("\r\n");
+    }
+
+    execute!(stdout, Print(frame))?;
     stdout.flush()?;
     Ok(())
 }
